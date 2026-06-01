@@ -1004,7 +1004,7 @@ export default function Home() {
               whileInView={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.8 }}
               viewport={{ once: false }}
-              className="lg:col-span-6 h-48 lg:h-[70vh] relative rounded-2xl overflow-hidden border border-zinc-800 shadow-2xl group"
+              className="lg:col-span-6 h-64 sm:h-80 lg:h-[70vh] relative rounded-2xl overflow-hidden border border-zinc-800 shadow-2xl group"
             >
               {/* Fallback image designed elegantly to feel like video display */}
               <img
@@ -1034,12 +1034,12 @@ export default function Home() {
                 </video>
               */}
 
-              <div className="absolute bottom-6 inset-x-6 z-20 bg-black/60 backdrop-blur-md border border-zinc-900 p-4 rounded-xl flex items-center justify-between">
+              <div className="absolute bottom-3 inset-x-3 sm:bottom-6 sm:inset-x-6 z-20 bg-black/60 backdrop-blur-md border border-zinc-900 p-3 sm:p-4 rounded-xl flex flex-col sm:flex-row gap-2.5 sm:gap-0 sm:items-center sm:justify-between">
                 <div>
                   <span className="text-[10px] text-[#c5a059] uppercase font-bold tracking-widest">Carne Sizzling Angus</span>
-                  <p className="text-xs text-zinc-350 mt-1 font-sans">Gabinete de fogo e ponto perfeito selado a 280°C.</p>
+                  <p className="text-xs text-zinc-350 mt-1 font-sans">Chama viva e ponto perfeito selado a 280°C.</p>
                 </div>
-                <div className="flex gap-1">
+                <div className="flex gap-1 self-start sm:self-auto">
                   <Star className="w-4 h-4 text-[#c5a059] fill-current" />
                   <Star className="w-4 h-4 text-[#c5a059] fill-current" />
                   <Star className="w-4 h-4 text-[#c5a059] fill-current" />
