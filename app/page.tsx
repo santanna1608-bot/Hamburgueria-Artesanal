@@ -268,15 +268,16 @@ export default function Home() {
           drawWidth = h * imgRatio;
         }
 
-        // Apply 1.02 base size and subtle slow scroll zoom (up to +5% size at frame 80)
+        const isMobileDevice = w < 768;
+        // Apply base size (smaller on mobile to reduce zoom) and subtle slow scroll zoom (up to +5% size at frame 80)
         const zoom = 1.0 + (currentFrameRef.current / totalFrames) * 0.05;
-        const scale = 1.02 * zoom;
+        const baseScale = isMobileDevice ? 0.82 : 1.02;
+        const scale = baseScale * zoom;
         drawWidth *= scale;
         drawHeight *= scale;
 
         // Position the hamburger (which is at 73% width in the raw image)
         // at 70.5% of the screen width on desktop, and 50% (centered) on mobile.
-        const isMobileDevice = w < 768;
         const targetXRatio = isMobileDevice ? 0.5 : 0.705;
         // Center vertically on desktop, shift slightly down on mobile to clear space for the text overlay
         const targetYRatio = isMobileDevice ? 0.66 : 0.5;
@@ -738,8 +739,8 @@ export default function Home() {
         />
       </div>
       
-      {/* Global black gradient overlay: top-down on mobile, left-to-right on desktop for perfect text readability and contrast */}
-      <div className="fixed inset-0 w-full h-full bg-gradient-to-b from-black via-black/85 to-transparent md:bg-gradient-to-r md:from-black md:via-black/90 md:to-transparent z-0 pointer-events-none" />
+      {/* Global black gradient overlay: removed on mobile (transparent) to show vibrant hamburger colors, kept left-to-right on desktop for text readability */}
+      <div className="fixed inset-0 w-full h-full bg-transparent md:bg-gradient-to-r md:from-black md:via-black/90 md:to-transparent z-0 pointer-events-none" />
 
       {/* 1. HEADER OVERLAY NAVIGATION (Fixed, Floating) */}
       <header id="header-nav" className="fixed top-0 inset-x-0 z-40 bg-gradient-to-b from-black/90 via-black/40 to-transparent p-6 backdrop-blur-[4px]">
