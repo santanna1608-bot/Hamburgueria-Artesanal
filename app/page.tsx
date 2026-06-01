@@ -24,13 +24,11 @@ import {
 } from 'lucide-react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import Hls from 'hls.js';
 
 if (typeof window !== 'undefined') {
   gsap.registerPlugin(ScrollTrigger);
 }
 
-// Structuring burgers data
 interface Burger {
   id: string;
   name: string;
@@ -83,204 +81,355 @@ function SectionBackground({
   );
 }
 
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  size: number;
+  rotation: number;
+  vRot: number;
+  opacity: number;
+  type: 'seed' | 'crumb' | 'dust';
+  blur: number;
+}
+
 export default function Home() {
-  // Navigation & Scroll Tracking
   const [activeSection, setActiveSection] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const heroRef = useRef<HTMLElement>(null);
-  const targetTimeRef = useRef(0);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Background Video State & Load/Buffer Management
-  const [isVideoLoading, setIsVideoLoading] = useState(true);
+  // Background Images Loading State
+  const [imagesLoaded, setImagesLoaded] = useState(false);
   const [bufferPercentage, setBufferPercentage] = useState(0);
+  const [isScrollLocked, setIsScrollLocked] = useState(true);
+  const imagesRef = useRef<HTMLImageElement[]>([]);
 
-  // Load Adaptive Stream or Direct MP4 url
+  // Scroll seek refs
+  const totalFrames = 80;
+  const targetFrameRef = useRef(1);
+  const currentFrameRef = useRef(1);
+  const lockReleasedTime = useRef(0);
+  const touchStartY = useRef(0);
+
+  // Mouse parallax refs
+  const mouseRef = useRef({ x: 0, y: 0 });
+  const smoothMouseRef = useRef({ x: 0, y: 0 });
+
+  // Particles
+  const particlesRef = useRef<Particle[]>([]);
+
+  // 1. Preload 80 images from public folder
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const video = videoRef.current;
-    if (!video) return;
 
-    const mp4Url = 'https://res.cloudinary.com/dq3cmyhmo/video/upload/v1780245130/Hamb%C3%BArguer_explode_em_c%C3%A2mera_lenta_202605311322_wodmyu.mp4';
-    // Cloudinary adapts automatically if loaded as .m3u8 with adaptive streaming profiles.
-    const hlsUrl = mp4Url.replace('.mp4', '.m3u8');
+    let loadedCount = 0;
+    const loadedImages: HTMLImageElement[] = [];
 
-    // Identify Safari
-    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    for (let i = 0; i < totalFrames; i++) {
+      const img = new Image();
+      const frameNum = String(i).padStart(3, '0');
+      img.src = `/images-hero/frame_${frameNum}.jpg`;
 
-    let hls: Hls | null = null;
-
-    // Track buffering progress of the video
-    const handleProgress = () => {
-      if (video.buffered.length > 0) {
-        const bufferedEnd = video.buffered.end(video.buffered.length - 1);
-        const duration = video.duration;
-        if (duration > 0) {
-          const pct = Math.round((bufferedEnd / duration) * 100);
-          setBufferPercentage((prev) => Math.min(100, Math.max(prev, pct)));
+      img.onload = () => {
+        loadedCount++;
+        setBufferPercentage(Math.round((loadedCount / totalFrames) * 100));
+        if (loadedCount === totalFrames) {
+          imagesRef.current = loadedImages;
+          setImagesLoaded(true);
         }
-      }
-    };
+      };
 
-    const handleCanPlay = () => {
-      setBufferPercentage(100);
-      const timer = setTimeout(() => {
-        setIsVideoLoading(false);
-      }, 500);
-      return () => clearTimeout(timer);
-    };
-
-    video.addEventListener('progress', handleProgress);
-    video.addEventListener('canplay', handleCanPlay);
-    video.addEventListener('canplaythrough', handleCanPlay);
-
-    const loadNativeMp4 = () => {
-      video.src = mp4Url;
-      video.load();
-    };
-
-    // If not Safari and HLS is supported, use hls.js for adaptive streaming
-    if (!isSafari && Hls.isSupported()) {
-      hls = new Hls({
-        maxMaxBufferLength: 30,
-        enableWorker: true,
-        lowLatencyMode: true
-      });
-
-      hls.loadSource(hlsUrl);
-      hls.attachMedia(video);
-
-      hls.on(Hls.Events.ERROR, (event, data) => {
-        if (data.fatal) {
-          console.warn('HLS.js fatal error, falling back natively to raw MP4:', data);
-          hls?.destroy();
-          hls = null;
-          loadNativeMp4();
+      img.onerror = () => {
+        console.error(`Erro ao carregar frame_${frameNum}.jpg`);
+        loadedCount++;
+        setBufferPercentage(Math.round((loadedCount / totalFrames) * 100));
+        if (loadedCount === totalFrames) {
+          imagesRef.current = loadedImages;
+          setImagesLoaded(true);
         }
-      });
-    } else {
-      // Direct native playback (ideal for Safari as requested, and fallback devices)
-      loadNativeMp4();
+      };
+
+      loadedImages.push(img);
     }
-
-    return () => {
-      if (hls) {
-        hls.destroy();
-      }
-      video.removeEventListener('progress', handleProgress);
-      video.removeEventListener('canplay', handleCanPlay);
-      video.removeEventListener('canplaythrough', handleCanPlay);
-    };
   }, []);
 
-  // Safety loading fallback threshold
-  useEffect(() => {
-    const safetyTimer = setTimeout(() => {
-      setIsVideoLoading(false);
-    }, 6000);
-    return () => clearTimeout(safetyTimer);
-  }, []);
+  // Initialize particles once canvas size is set
+  const initParticles = (width: number, height: number) => {
+    const list: Particle[] = [];
+    for (let i = 0; i < 50; i++) {
+      const typeVal = Math.random();
+      let type: 'seed' | 'crumb' | 'dust' = 'dust';
+      let size = Math.random() * 1.5 + 0.5;
+      let blur = 0;
 
-  // 1. Smoothly transition video currentTime when activeSection changes (extremely lightweight & fluid)
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const video = videoRef.current;
-    if (!video || isVideoLoading) return;
-    const duration = video.duration;
-    if (!duration || isNaN(duration)) return;
+      if (typeVal > 0.75) {
+        type = 'seed'; // Sesame seed
+        size = Math.random() * 5 + 3.5;
+        blur = Math.random() > 0.6 ? 1.5 : 0; // Some are blurry in foreground
+      } else if (typeVal > 0.45) {
+        type = 'crumb'; // Golden crumbs
+        size = Math.random() * 2.5 + 1.5;
+      }
 
-    if (activeSection > 0) {
-      // Smoothly animate video forward to show the exploding burger sequence
-      gsap.to(video, {
-        currentTime: duration,
-        duration: 1.6,
-        ease: "power2.out",
-        overwrite: "auto",
-        onUpdate: () => {
-          targetTimeRef.current = video.currentTime;
-        }
-      });
-    } else {
-      // Smoothly reverse to the original appetizing static burger state when scrolled to the top
-      gsap.to(video, {
-        currentTime: 0,
-        duration: 1.6,
-        ease: "power2.out",
-        overwrite: "auto",
-        onUpdate: () => {
-          targetTimeRef.current = video.currentTime;
-        }
+      list.push({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        vx: (Math.random() - 0.5) * 0.4,
+        vy: type === 'seed' ? Math.random() * 0.6 + 0.4 : (Math.random() - 0.5) * 0.15 + 0.1,
+        size,
+        rotation: Math.random() * Math.PI * 2,
+        vRot: (Math.random() - 0.5) * 0.015,
+        opacity: Math.random() * 0.5 + 0.2,
+        type,
+        blur
       });
     }
-  }, [activeSection, isVideoLoading]);
+    particlesRef.current = list;
+  };
 
-  // 2. High performance Scroll-To-Seek Lock in section 0 (Hero) with premium GSAP Inertial Interpolation
+  // 2. RequestAnimationFrame Render Loop for Canvas
+  useEffect(() => {
+    if (!imagesLoaded || imagesRef.current.length === 0) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animId: number;
+
+    const draw = () => {
+      // Lerp frame indices for sub-pixel smooth animations
+      const diff = targetFrameRef.current - currentFrameRef.current;
+      const speedFactor = Math.abs(diff);
+      
+      if (Math.abs(diff) > 0.02) {
+        currentFrameRef.current += diff * 0.18; // smooth easing factor
+      } else {
+        currentFrameRef.current = targetFrameRef.current;
+      }
+
+      const frameIndex = Math.round(currentFrameRef.current);
+      const activeImg = imagesRef.current[Math.max(0, Math.min(totalFrames - 1, frameIndex - 1))];
+
+      // Responsive canvas resizing
+      const w = canvas.width = canvas.clientWidth;
+      const h = canvas.height = canvas.clientHeight;
+
+      if (particlesRef.current.length === 0) {
+        initParticles(w, h);
+      }
+
+      // Parallax easing
+      const targetX = mouseRef.current.x;
+      const targetY = mouseRef.current.y;
+      smoothMouseRef.current.x += (targetX - smoothMouseRef.current.x) * 0.08;
+      smoothMouseRef.current.y += (targetY - smoothMouseRef.current.y) * 0.08;
+
+      const parallaxX = smoothMouseRef.current.x * 20;
+      const parallaxY = smoothMouseRef.current.y * 20;
+
+      // 1. Draw solid black background
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, w, h);
+
+      // 2. Draw dark red background spotlight glow
+      const bgGlow = ctx.createRadialGradient(w / 2, h / 2, 50, w / 2, h / 2, Math.max(w, h) * 0.45);
+      bgGlow.addColorStop(0, 'rgba(110, 0, 0, 0.45)');
+      bgGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = bgGlow;
+      ctx.fillRect(0, 0, w, h);
+
+      // 3. Draw volumetric fog (slowly floating particles of light red)
+      const fogTime = Date.now() * 0.0003;
+      const fogX = w / 2 + Math.sin(fogTime) * 80;
+      const fogY = h / 2 + Math.cos(fogTime * 0.8) * 60;
+      const fogGlow = ctx.createRadialGradient(fogX, fogY, 20, fogX, fogY, Math.max(w, h) * 0.35);
+      fogGlow.addColorStop(0, 'rgba(25, 5, 5, 0.25)');
+      fogGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = fogGlow;
+      ctx.fillRect(0, 0, w, h);
+
+      // 4. Draw hamburger image aspect-ratio aware (cover)
+      if (activeImg && activeImg.complete) {
+        const canvasRatio = w / h;
+        const imgRatio = activeImg.width / activeImg.height;
+
+        let drawWidth = w;
+        let drawHeight = h;
+
+        if (canvasRatio > imgRatio) {
+          drawWidth = w;
+          drawHeight = w / imgRatio;
+        } else {
+          drawHeight = h;
+          drawWidth = h * imgRatio;
+        }
+
+        // Apply 1.02 base size and subtle slow scroll zoom (up to +5% size at frame 80)
+        const zoom = 1.0 + (currentFrameRef.current / totalFrames) * 0.05;
+        const scale = 1.02 * zoom;
+        drawWidth *= scale;
+        drawHeight *= scale;
+
+        // Position the hamburger (which is at 73% width in the raw image)
+        // at 70.5% of the screen width on desktop, and 50% (centered) on mobile.
+        const isMobileDevice = w < 768;
+        const targetXRatio = isMobileDevice ? 0.5 : 0.705;
+        // Center vertically on desktop, shift slightly down on mobile to clear space for the text overlay
+        const targetYRatio = isMobileDevice ? 0.58 : 0.5;
+        const posX = (targetXRatio * w) - (0.73 * drawWidth) + parallaxX;
+        const posY = (targetYRatio * h) - (drawHeight / 2) + parallaxY;
+
+        ctx.drawImage(activeImg, posX, posY, drawWidth, drawHeight);
+
+        // 5. Draw cheese glow (highlight on the cheddar layer)
+        // Cheddar is roughly positioned at the middle-lower section of the image
+        const cheeseX = w / 2 + parallaxX;
+        const cheeseY = h / 2 + (drawHeight * 0.05) + parallaxY;
+        const pulse = Math.sin(Date.now() * 0.003) * 0.5 + 0.5;
+        const glowRad = Math.min(w, h) * 0.12;
+
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        const cheeseGlow = ctx.createRadialGradient(cheeseX, cheeseY, 2, cheeseX, cheeseY, glowRad);
+        cheeseGlow.addColorStop(0, `rgba(255, 210, 0, ${0.16 * pulse})`);
+        cheeseGlow.addColorStop(0.5, `rgba(255, 150, 0, ${0.04 * pulse})`);
+        cheeseGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = cheeseGlow;
+        ctx.beginPath();
+        ctx.arc(cheeseX, cheeseY, glowRad, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // 6. Draw top spotlight (cinematic warm light beam)
+      const spotGlow = ctx.createLinearGradient(w / 2, 0, w / 2, h);
+      spotGlow.addColorStop(0, 'rgba(255, 240, 210, 0.10)');
+      spotGlow.addColorStop(0.5, 'rgba(255, 240, 210, 0.02)');
+      spotGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = spotGlow;
+      ctx.fillRect(0, 0, w, h);
+
+      // 7. Update and Draw sesame seeds and crumbs
+      particlesRef.current.forEach((p) => {
+        // Fall speed increases when user is actively scrolling (diff > 0)
+        const fallMultiplier = 1.0 + speedFactor * 1.5;
+        p.y += p.vy * fallMultiplier;
+        p.x += p.vx + (Math.sin(p.y * 0.015) * speedFactor * 0.3);
+        p.rotation += p.vRot;
+
+        // Wrap around when falling off screen
+        if (p.y > h + 20) {
+          p.y = -20;
+          p.x = Math.random() * w;
+        }
+        if (p.x < -20) p.x = w + 20;
+        if (p.x > w + 20) p.x = -20;
+
+        ctx.save();
+        // Removed heavy ctx.filter blur to achieve 60-120fps ultra-fluid scroll performance.
+        // Instead, we represent blurry depth by scaling opacity down for out-of-focus particles.
+        const particleOpacity = p.blur > 0 ? p.opacity * 0.45 : p.opacity;
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rotation);
+
+        if (p.type === 'seed') {
+          // Sesame shape (oval/drop)
+          ctx.fillStyle = `rgba(238, 222, 196, ${particleOpacity})`;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, p.size, p.size * 0.6, 0, 0, Math.PI * 2);
+          ctx.fill();
+          
+          // Seed highlight
+          ctx.fillStyle = `rgba(255, 255, 255, ${particleOpacity * 0.4})`;
+          ctx.beginPath();
+          ctx.ellipse(-p.size * 0.2, -p.size * 0.1, p.size * 0.3, p.size * 0.2, 0, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (p.type === 'crumb') {
+          // Crumb shape (tiny circle)
+          ctx.fillStyle = `rgba(190, 150, 80, ${particleOpacity})`;
+          ctx.beginPath();
+          ctx.arc(0, 0, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          // Ambient dust (soft glowing circle)
+          ctx.fillStyle = `rgba(255, 255, 255, ${particleOpacity * 0.35})`;
+          ctx.beginPath();
+          ctx.arc(0, 0, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.restore();
+      });
+
+      animId = requestAnimationFrame(draw);
+    };
+
+    animId = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(animId);
+  }, [imagesLoaded]);
+
+  // 3. Wheel & Touch Scroll-Hijacking Logic
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const hero = heroRef.current;
-    const video = videoRef.current;
-    if (!hero || !video || isVideoLoading) return;
-
-    let touchStartY = 0;
+    if (!imagesLoaded) return;
 
     const handleWheel = (e: WheelEvent) => {
-      // Only handle lock/scrub if we are currently parked or starting on the Hero section
       if (activeSection !== 0) return;
-
-      const duration = video.duration;
-      if (!duration || isNaN(duration)) return;
 
       // Scrolling Down
       if (e.deltaY > 0) {
-        // As long as the video hasn't scrubbed near the end, hijack the scroll event
-        if (targetTimeRef.current < duration - 0.12) {
+        if (targetFrameRef.current < totalFrames) {
           e.preventDefault();
-          
-          // Smoothen out variations between mouse wheels and trackpads
-          const rawDelta = e.deltaY;
-          const cappedDelta = Math.sign(rawDelta) * Math.min(60, Math.abs(rawDelta));
-          const step = cappedDelta * 0.0018; 
-          
-          let nextTarget = targetTimeRef.current + step;
-          if (nextTarget > duration - 0.04) {
-            nextTarget = duration;
-          }
-          
-          targetTimeRef.current = nextTarget;
 
-          // Perform state-of-the-art cinematic inertial seek via GSAP tweening
-          gsap.to(video, {
-            currentTime: nextTarget,
-            duration: 0.70,
-            ease: "power1.out",
-            overwrite: "auto"
-          });
+          const rawDelta = e.deltaY;
+          const step = Math.max(1, Math.min(4, Math.abs(rawDelta) * 0.025)); // slightly faster step scaling
+          let nextFrame = targetFrameRef.current + step;
+
+          if (nextFrame > totalFrames) {
+            nextFrame = totalFrames;
+          }
+
+          targetFrameRef.current = nextFrame;
+
+          if (nextFrame === totalFrames) {
+            lockReleasedTime.current = Date.now() + 500; // 0.5s pause
+          }
+        } else {
+          // Lock scroll for 0.5s on the last frame
+          if (Date.now() < lockReleasedTime.current) {
+            e.preventDefault();
+          } else {
+            // Unlock physical scroll when lock has expired
+            if (isScrollLocked) {
+              setIsScrollLocked(false);
+            }
+          }
         }
-      } 
+      }
       // Scrolling Up
       else if (e.deltaY < 0) {
-        // If we are at the top of the container, scrub the video backwards cleanly with similar physics
         if (containerRef.current && containerRef.current.scrollTop === 0) {
-          if (targetTimeRef.current > 0.04) {
+          if (targetFrameRef.current > 1) {
             e.preventDefault();
-            
-            const rawDelta = e.deltaY;
-            const cappedDelta = Math.sign(rawDelta) * Math.min(60, Math.abs(rawDelta));
-            const step = cappedDelta * 0.0018; 
-            
-            let nextTarget = targetTimeRef.current + step;
-            if (nextTarget < 0) {
-              nextTarget = 0;
-            }
-            
-            targetTimeRef.current = nextTarget;
 
-            gsap.to(video, {
-              currentTime: nextTarget,
-              duration: 0.70,
-              ease: "power1.out",
-              overwrite: "auto"
-            });
+            // Relock scroll when coming back up
+            if (!isScrollLocked) {
+              setIsScrollLocked(true);
+            }
+
+            const rawDelta = e.deltaY;
+            const step = Math.max(1, Math.min(4, Math.abs(rawDelta) * 0.025));
+            let nextFrame = targetFrameRef.current - step;
+
+            if (nextFrame < 1) {
+              nextFrame = 1;
+            }
+
+            targetFrameRef.current = nextFrame;
           }
         }
       }
@@ -288,7 +437,7 @@ export default function Home() {
 
     const handleTouchStart = (e: TouchEvent) => {
       if (e.touches.length > 0) {
-        touchStartY = e.touches[0].clientY;
+        touchStartY.current = e.touches[0].clientY;
       }
     };
 
@@ -296,95 +445,82 @@ export default function Home() {
       if (activeSection !== 0) return;
       if (e.touches.length === 0) return;
 
-      const duration = video.duration;
-      if (!duration || isNaN(duration)) return;
-
       const currentY = e.touches[0].clientY;
-      const deltaY = touchStartY - currentY; // positive = scroll down (swipe up)
+      const deltaY = touchStartY.current - currentY; // positive = scroll down (swipe up)
 
       if (deltaY > 0) {
-        if (targetTimeRef.current < duration - 0.12) {
+        if (targetFrameRef.current < totalFrames) {
           e.preventDefault();
-          
-          const cappedDelta = Math.sign(deltaY) * Math.min(45, Math.abs(deltaY));
-          const step = cappedDelta * 0.0025;
-          let nextTarget = targetTimeRef.current + step;
-          
-          if (nextTarget > duration - 0.04) {
-            nextTarget = duration;
+
+          const step = Math.max(1, Math.min(4, Math.abs(deltaY) * 0.08));
+          let nextFrame = targetFrameRef.current + step;
+
+          if (nextFrame > totalFrames) {
+            nextFrame = totalFrames;
           }
-          targetTimeRef.current = nextTarget;
-          
-          gsap.to(video, {
-            currentTime: nextTarget,
-            duration: 0.75,
-            ease: "power1.out",
-            overwrite: "auto"
-          });
-          
-          touchStartY = currentY;
+          targetFrameRef.current = nextFrame;
+
+          if (nextFrame === totalFrames) {
+            lockReleasedTime.current = Date.now() + 500; // 0.5s pause
+          }
+
+          touchStartY.current = currentY;
+        } else {
+          if (Date.now() < lockReleasedTime.current) {
+            e.preventDefault();
+          } else {
+            // Unlock physical scroll when lock has expired
+            if (isScrollLocked) {
+              setIsScrollLocked(false);
+            }
+          }
         }
       } else if (deltaY < 0) {
         if (containerRef.current && containerRef.current.scrollTop === 0) {
-          if (targetTimeRef.current > 0.04) {
+          if (targetFrameRef.current > 1) {
             e.preventDefault();
-            
-            const cappedDelta = Math.sign(deltaY) * Math.min(45, Math.abs(deltaY));
-            const step = cappedDelta * 0.0025;
-            let nextTarget = targetTimeRef.current + step;
-            
-            if (nextTarget < 0) {
-              nextTarget = 0;
+
+            // Relock scroll when coming back up
+            if (!isScrollLocked) {
+              setIsScrollLocked(true);
             }
-            targetTimeRef.current = nextTarget;
-            
-            gsap.to(video, {
-              currentTime: nextTarget,
-              duration: 0.75,
-              ease: "power1.out",
-              overwrite: "auto"
-            });
-            
-            touchStartY = currentY;
+
+            const step = Math.max(1, Math.min(4, Math.abs(deltaY) * 0.08));
+            let nextFrame = targetFrameRef.current - step;
+
+            if (nextFrame < 1) {
+              nextFrame = 1;
+            }
+            targetFrameRef.current = nextFrame;
+
+            touchStartY.current = currentY;
           }
         }
       }
     };
 
-    hero.addEventListener('wheel', handleWheel, { passive: false });
-    hero.addEventListener('touchstart', handleTouchStart, { passive: true });
-    hero.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('wheel', handleWheel, { passive: false });
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
 
     return () => {
-      hero.removeEventListener('wheel', handleWheel);
-      hero.removeEventListener('touchstart', handleTouchStart);
-      hero.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('wheel', handleWheel);
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchmove', handleTouchMove);
     };
-  }, [activeSection, isVideoLoading]);
+  }, [activeSection, imagesLoaded, isScrollLocked]);
 
-  // Mouse move 3D Parallax on background video element
+  // Track mouse coordinates for parallax
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const video = videoRef.current;
-    if (!video) return;
 
     const handleMouseMove = (e: MouseEvent) => {
       const { clientX, clientY } = e;
       const { innerWidth, innerHeight } = window;
-
-      // Offset from center (-0.5 to 0.5)
-      const xPercent = (clientX / innerWidth) - 0.5;
-      const yPercent = (clientY / innerHeight) - 0.5;
-
-      gsap.to(video, {
-        x: xPercent * 30, // move up to 30px
-        y: yPercent * 30,
-        rotateX: -yPercent * 4, // subtle perspective tilt
-        rotateY: xPercent * 4,
-        transformPerspective: 1200,
-        duration: 1.0,
-        ease: "power2.out"
-      });
+      mouseRef.current = {
+        x: (clientX / innerWidth) - 0.5,
+        y: (clientY / innerHeight) - 0.5
+      };
     };
 
     window.addEventListener('mousemove', handleMouseMove);
@@ -430,10 +566,17 @@ export default function Home() {
     if (!containerRef.current) return;
     const scrollTop = containerRef.current.scrollTop;
     const height = containerRef.current.clientHeight;
-    // Round to nearest section index
     const index = Math.round(scrollTop / height);
     if (index !== activeSection) {
       setActiveSection(index);
+      // Auto snap targetFrameRef to maximum or minimum on section change
+      if (index === 0) {
+        targetFrameRef.current = totalFrames;
+        currentFrameRef.current = totalFrames;
+        setIsScrollLocked(true); // Lock physical scroll when returning to Hero
+      } else {
+        setIsScrollLocked(false); // Physically unlock scroll for other sections
+      }
     }
   };
 
@@ -465,7 +608,6 @@ export default function Home() {
   const confirmAddToCart = () => {
     if (!selectedBurgerForConfig) return;
     
-    // Check if exactly same item with same point and extras already in cart
     const existingIndex = cart.findIndex(item => 
       item.burger.id === selectedBurgerForConfig.id && 
       item.point === configPoint && 
@@ -493,15 +635,13 @@ export default function Home() {
     setCart(updated);
   };
 
-  // Helper code to calculate price details
   const getCartTotal = () => {
     return cart.reduce((total, item) => {
-      const extrasCost = item.extras.length * 5.00; // Extra ingredients cost R$ 5,00 each
+      const extrasCost = item.extras.length * 5.00;
       return total + (item.burger.price + extrasCost) * item.quantity;
     }, 0);
   };
 
-  // Custom checkout message formatter to send straight to active WhatsApp
   const handleCheckoutSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!clientName.trim()) {
@@ -548,43 +688,40 @@ export default function Home() {
   };
 
   return (
-    <div className="bg-[#050505] text-white font-sans antialiased relative selection:bg-[#c5a059]/40 selection:text-white">
+    <div className="bg-[#000000] text-white font-sans antialiased relative selection:bg-[#c5a059]/40 selection:text-white">
       
-      {/* 0. CINEMATIC VIDEO LOADING OVERLAY */}
+      {/* 0. CINEMATIC LOADING OVERLAY */}
       <AnimatePresence>
-        {isVideoLoading && (
+        {!imagesLoaded && (
           <motion.div
-            key="video-loader"
+            key="image-loader"
             initial={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.8, ease: "easeInOut" }}
-            className="fixed inset-0 z-50 bg-[#050505] flex flex-col items-center justify-center pointer-events-auto"
+            className="fixed inset-0 z-50 bg-[#000000] flex flex-col items-center justify-center pointer-events-auto"
           >
             <div className="flex flex-col items-center max-w-sm px-6 text-center">
               <div className="relative mb-6">
-                {/* Outter glowing spinner ring */}
                 <div className="w-16 h-16 rounded-full border-2 border-zinc-900 border-t-[#c5a059] animate-spin" />
-                {/* Center glowing logo */}
                 <div className="absolute inset-0 flex items-center justify-center">
                   <Flame className="w-6 h-6 text-[#c5a059] animate-pulse" />
                 </div>
               </div>
 
-              <span className="font-sans font-bold tracking-[0.2em] text-sm uppercase text-[#c5a059]">
+              <span className="font-sans font-bold tracking-[0.2em] text-[#c5a059] text-sm uppercase">
                 ARTISAN BURGER
               </span>
-              <p className="text-xs text-zinc-550 font-mono tracking-widest mt-2 uppercase">
+              <p className="text-xs text-zinc-400 font-mono tracking-widest mt-2 uppercase">
                 Carregando Experiência Cinematográfica
               </p>
               
-              {/* Buffering bar indicator */}
               <div className="w-48 h-[3px] bg-zinc-950 mt-6 rounded-full overflow-hidden relative border border-zinc-900">
                 <div 
                   className="h-full bg-gradient-to-r from-[#7f0000] to-[#c5a059] transition-all duration-300"
                   style={{ width: `${bufferPercentage}%` }}
                 />
               </div>
-              <span className="text-zinc-650 text-[10px] font-mono mt-2 block">
+              <span className="text-zinc-500 text-[10px] font-mono mt-2 block">
                 {bufferPercentage}% carregado
               </span>
             </div>
@@ -592,36 +729,17 @@ export default function Home() {
         )}
       </AnimatePresence>
 
-      {/* Global Scroll-Seek Background Video */}
-      <div id="video-scrub-container" className="fixed inset-0 w-full h-screen z-0 overflow-hidden bg-[#050505]">
-        <video
-          ref={videoRef}
-          muted
-          playsInline
-          preload="auto"
-          className="w-full h-full object-cover origin-center transition-opacity duration-500"
-          style={{ transform: "scale(1)", opacity: 1.0 }}
-        />
-        
-        {/* Dynamic Dark cinematic overlays for perfect contextual readability */}
-        <div 
-          className="absolute inset-0 bg-black transition-all duration-1000 ease-in-out pointer-events-none z-10"
-          style={{ backgroundColor: activeSection === 0 ? "rgba(0, 0, 0, 0.15)" : "rgba(0, 0, 0, 0.70)" }}
-        />
-        <div 
-          className="absolute inset-0 bg-gradient-to-t from-[#050505] via-transparent to-black transition-all duration-1000 ease-in-out pointer-events-none z-10"
-          style={{ opacity: activeSection === 0 ? 0.35 : 0.85 }}
-        />
-        <div 
-          className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(127,0,0,0.1)_0%,_transparent_70%)] transition-all duration-1000 ease-in-out pointer-events-none z-10"
-          style={{ opacity: activeSection === 0 ? 0.2 : 0.6 }}
+      {/* Global Scroll-Seek Background Canvas */}
+      <div id="canvas-scrub-container" className="fixed inset-0 w-full h-screen z-0 overflow-hidden bg-[#000000]">
+        <canvas
+          ref={canvasRef}
+          className="w-full h-full block"
+          style={{ opacity: imagesLoaded ? 1 : 0 }}
         />
       </div>
-
-      {/* Cinematic Background Overlays */}
-      <div className="fixed inset-0 bg-[radial-gradient(circle_at_center,_rgba(127,0,0,0.15)_0%,_transparent_70%)] opacity-65 pointer-events-none z-10"></div>
-      <div className="fixed inset-0 bg-[linear-gradient(to_bottom,rgba(5,5,5,0.7),rgba(5,5,5,0.3)_50%,rgba(5,5,5,0.8))] pointer-events-none z-10"></div>
-      <div className="fixed -bottom-24 -left-24 w-96 h-96 bg-[#7f0000] rounded-full blur-[150px] opacity-15 pointer-events-none z-10"></div>
+      
+      {/* Global black gradient overlay: top-down on mobile, left-to-right on desktop for perfect text readability and contrast */}
+      <div className="fixed inset-0 w-full h-full bg-gradient-to-b from-black via-black/85 to-transparent md:bg-gradient-to-r md:from-black md:via-black/90 md:to-transparent z-0 pointer-events-none" />
 
       {/* 1. HEADER OVERLAY NAVIGATION (Fixed, Floating) */}
       <header id="header-nav" className="fixed top-0 inset-x-0 z-40 bg-gradient-to-b from-black/90 via-black/40 to-transparent p-6 backdrop-blur-[4px]">
@@ -711,104 +829,111 @@ export default function Home() {
         })}
       </div>
 
-      {/* 3. 100vh FULL-SCREEN CONTAINER WITH Y-SNAP */}
+      {/* 3. 100vh FULL-SCREEN CONTAINER WITH Y-SNAP (Desktop only) */}
       <div
         ref={containerRef}
         onScroll={handleScroll}
-        className="h-screen w-full snap-y snap-mandatory overflow-y-scroll overflow-x-hidden scroll-smooth scrollbar-none"
+        className={`h-screen w-full md:snap-y md:snap-mandatory overflow-x-hidden scroll-smooth scrollbar-none ${
+          isScrollLocked ? 'overflow-y-hidden' : 'overflow-y-scroll'
+        }`}
       >
         
         {/* SEÇÃO 1 - HERO (100vh) */}
-        <section ref={heroRef} id="banner-hero" className="h-screen w-full relative flex items-center snap-start justify-start px-6 lg:px-16 xl:px-24 overflow-hidden">
-          {/* Transparent left-to-right shadow gradient keeping center-right completely unmasked */}
-          <div className="absolute inset-y-0 left-0 w-full md:w-3/5 bg-gradient-to-r from-black/85 via-black/40 to-transparent z-10 pointer-events-none" />
-
-          <div className="z-20 max-w-xl md:max-w-xl lg:max-w-2xl w-full flex flex-col items-start pt-16 md:pt-20 pl-0 md:pl-4 select-none">
-            <motion.div
-              initial={{ opacity: 0, y: 50 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.1 }}
-              viewport={{ once: false }}
-              className="flex items-center gap-2 px-4 py-1.5 bg-[#4a0000]/80 border border-[#c5a059]/40 rounded-full mb-6 text-xs sm:text-sm font-semibold tracking-widest text-[#c5a059] uppercase shadow-lg self-start animate-pulse"
-            >
-              <Sparkles className="w-4 h-4 text-[#c5a059]" />
-              Premium & 100% Artesanal por Essência
-            </motion.div>
-
-            <motion.h1
-              initial={{ opacity: 0, y: 50 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.3 }}
-              viewport={{ once: false }}
-              className="text-[2.2rem] sm:text-4xl md:text-5xl lg:text-6xl font-serif font-light leading-[1.12] mb-5 italic tracking-tight text-white max-w-md lg:max-w-lg"
-            >
-              O Hambúrguer Artesanal Que Vai Mudar Seu <br />
-              <span className="bg-gradient-to-r from-[#ffd700] to-[#c5a059] bg-clip-text text-transparent not-italic font-sans font-extrabold uppercase tracking-tighter">
-                Conceito de Sabor
-              </span>
-            </motion.h1>
-
-            <motion.p
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.5 }}
-              viewport={{ once: false }}
-              className="mt-3 text-zinc-350 max-w-sm lg:max-w-md text-sm sm:text-base leading-relaxed font-sans"
-            >
-              Ingredientes selecionados sob curadoria de chefs, carne Angus ultra-premium grelhada em chama viva e uma explosão de cremosidade insana em cada mordida.
-            </motion.p>
-
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.7 }}
-              viewport={{ once: false }}
-              className="mt-10 flex flex-wrap gap-4 items-center"
-            >
-              <button
-                onClick={() => scrollToSection(3)}
-                className="px-8 py-4 bg-gradient-to-r from-[#7f0000] to-[#5a0000] text-white font-bold uppercase tracking-widest text-xs rounded-full border-b-4 border-[#3a0000] transition-all duration-300 hover:scale-105 hover:from-[#9a0000] hover:to-[#7f0000] hover:shadow-[0_0_25px_rgba(127,0,0,0.5)] cursor-pointer"
+        <section ref={heroRef} id="banner-hero" className="h-screen w-full relative flex items-center snap-start justify-start px-6 lg:px-16 xl:px-24 overflow-hidden bg-transparent">
+          <div className="z-20 max-w-7xl mx-auto w-full grid grid-cols-1 md:grid-cols-10 items-center h-full gap-8 select-none">
+            
+            {/* Lado Esquerdo (45%) */}
+            <div className="md:col-span-5 flex flex-col items-start pt-24 sm:pt-28 md:pt-20 pl-0 md:pl-4">
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.1 }}
+                className="flex items-center gap-2 px-4 py-1.5 bg-[#2a1a08]/90 border border-[#c5a059]/50 rounded-full mb-6 text-xs sm:text-sm font-semibold tracking-widest text-[#c5a059] uppercase shadow-lg self-start"
               >
-                Peça Agora
-              </button>
-              <button
-                onClick={() => {
-                  const video = videoRef.current;
-                  if (video && video.duration) {
-                    gsap.to(video, {
-                      currentTime: video.duration - 0.25,
-                      duration: 0.8,
+                <Sparkles className="w-4 h-4 text-[#c5a059]" />
+                PREMIUM & 100% ARTESANAL POR ESSÊNCIA
+              </motion.div>
+
+              <motion.h1
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.2 }}
+                className="text-[2.2rem] sm:text-4xl md:text-5xl lg:text-6xl font-serif font-light leading-[1.12] mb-5 italic tracking-tight text-white max-w-md lg:max-w-lg"
+              >
+                O Hambúrguer <br />
+                Artesanal Que Vai <br />
+                Mudar Seu <br />
+                <span className="bg-gradient-to-r from-[#ffd700] to-[#c5a059] bg-clip-text text-transparent not-italic font-sans font-extrabold uppercase tracking-tighter block mt-2">
+                  CONCEITO DE
+                </span>
+                <span className="bg-gradient-to-r from-[#ffd700] to-[#c5a059] bg-clip-text text-transparent not-italic font-sans font-extrabold uppercase tracking-tighter block">
+                  SABOR
+                </span>
+              </motion.h1>
+
+              <motion.p
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.3 }}
+                className="text-zinc-350 max-w-sm lg:max-w-md text-sm sm:text-base leading-relaxed font-sans"
+              >
+                Ingredientes selecionados sob curadoria de chefs, carne Angus ultra-premium grelhada em chama viva e uma explosão de cremosidade insana em cada mordida.
+              </motion.p>
+
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.4 }}
+                className="mt-10 flex flex-wrap gap-4 items-center"
+              >
+                <button
+                  onClick={() => scrollToSection(6)}
+                  className="px-8 py-4 bg-gradient-to-r from-[#7f0000] to-[#5a0000] text-white font-bold uppercase tracking-widest text-xs rounded-full border-b-4 border-[#3a0000] transition-all duration-300 hover:scale-105 hover:from-[#9a0000] hover:to-[#7f0000] hover:shadow-[0_0_25px_rgba(127,0,0,0.5)] cursor-pointer"
+                >
+                  PEÇA AGORA
+                </button>
+                <button
+                  onClick={() => {
+                    gsap.to(currentFrameRef, {
+                      current: totalFrames,
+                      duration: 1.2,
+                      ease: "power2.out",
+                      onUpdate: () => {
+                        targetFrameRef.current = currentFrameRef.current;
+                      },
                       onComplete: () => {
+                        lockReleasedTime.current = Date.now();
                         scrollToSection(1);
                       }
                     });
-                  } else {
-                    scrollToSection(1);
-                  }
-                }}
-                className="px-8 py-4 bg-zinc-950/80 hover:bg-zinc-900 border border-zinc-800 hover:border-[#c5a059]/40 rounded-full font-bold uppercase tracking-widest text-xs text-zinc-300 transition-all duration-300 cursor-pointer"
-              >
-                Ver Experiência
-              </button>
-            </motion.div>
+                  }}
+                  className="px-8 py-4 bg-zinc-950/80 hover:bg-zinc-900 border border-zinc-800 hover:border-[#c5a059]/40 rounded-full font-bold uppercase tracking-widest text-xs text-zinc-300 transition-all duration-300 cursor-pointer"
+                >
+                  VER EXPERIÊNCIA
+                </button>
+              </motion.div>
+            </div>
+
+            {/* Lado Direito (55%) Spacer */}
+            <div className="md:col-span-5 relative h-full w-full pointer-events-none" />
           </div>
 
-          {/* Scoll indicator down */}
-          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-1 opacity-80 cursor-pointer" onClick={() => scrollToSection(1)}>
-            <span className="text-[10px] tracking-widest uppercase font-semibold text-[#c5a059]">Scroll para Explorar</span>
+          {/* Scroll indicator down */}
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-1.5 opacity-80 cursor-pointer" onClick={() => scrollToSection(1)}>
+            <span className="text-[10px] tracking-widest uppercase font-bold text-[#c5a059] font-sans">SCROLL PARA EXPLORAR</span>
             <motion.div
               animate={{ y: [0, 8, 0] }}
               transition={{ repeat: Infinity, duration: 1.5 }}
               className="w-1.5 h-1.5 bg-[#c5a059] rounded-full"
             />
-            <div className="w-5 h-8 border-2 border-zinc-850 rounded-full flex items-start justify-center p-1">
+            <div className="w-5 h-8 border-2 border-zinc-800 rounded-full flex items-start justify-center p-1">
               <div className="w-1 h-2 bg-zinc-700 rounded-full" />
             </div>
           </div>
         </section>
 
-        {/* SEÇÃO 2 - EXPERIÊNCIA GASTRONÔMICA (100vh) */}
-        <section id="secao-experiencia" className="h-screen w-full relative flex items-center snap-start justify-center px-6 lg:px-16 overflow-hidden bg-[#050505]">
+        {/* SEÇÃO 2 - EXPERIÊNCIA GASTRONÔMICA (min-h-screen/100vh) */}
+        <section id="secao-experiencia" className="min-h-screen md:h-screen w-full relative flex items-center md:snap-start justify-center px-6 py-20 md:py-0 lg:px-16 overflow-hidden bg-[#050505]">
           <div className="z-20 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-16 items-center">
             
             {/* Left Content */}
@@ -927,8 +1052,8 @@ export default function Home() {
           </div>
         </section>
 
-        {/* SEÇÃO 3 - PROCESSO ARTESANAL (100vh) */}
-        <section id="secao-processo" className="h-screen w-full relative flex items-center snap-start justify-center px-6 lg:px-16 overflow-hidden bg-gradient-to-b from-[#050505] via-zinc-950 to-[#050505]">
+        {/* SEÇÃO 3 - PROCESSO ARTESANAL (min-h-screen/100vh) */}
+        <section id="secao-processo" className="min-h-screen md:h-screen w-full relative flex items-center md:snap-start justify-center px-6 py-20 md:py-0 lg:px-16 overflow-hidden bg-gradient-to-b from-[#050505] via-zinc-950 to-[#050505]">
           <div className="z-20 max-w-7xl mx-auto w-full flex flex-col justify-center items-center">
             
             <motion.div
@@ -1007,8 +1132,8 @@ export default function Home() {
           </div>
         </section>
 
-        {/* SEÇÃO 4 - PRODUTOS DESTAQUE (100vh) */}
-        <section id="secao-produtos" className="h-screen w-full relative flex items-center snap-start justify-center px-6 lg:px-16 overflow-hidden bg-[#050505]">
+        {/* SEÇÃO 4 - PRODUTOS DESTAQUE (min-h-screen/100vh) */}
+        <section id="secao-produtos" className="min-h-screen md:h-screen w-full relative flex items-center md:snap-start justify-center px-6 py-20 md:py-0 lg:px-16 overflow-hidden bg-[#050505]">
           <div className="z-20 max-w-7xl mx-auto w-full flex flex-col justify-center">
             
             <motion.div
@@ -1083,8 +1208,8 @@ export default function Home() {
           </div>
         </section>
 
-        {/* SEÇÃO 5 - PROVA SOCIAL (100vh) */}
-        <section id="secao-provasocial" className="h-screen w-full relative flex items-center snap-start justify-center px-6 lg:px-16 overflow-hidden bg-[#050505]">
+        {/* SEÇÃO 5 - PROVA SOCIAL (min-h-screen/100vh) */}
+        <section id="secao-provasocial" className="min-h-screen md:h-screen w-full relative flex items-center md:snap-start justify-center px-6 py-20 md:py-0 lg:px-16 overflow-hidden bg-[#050505]">
           <div className="z-20 max-w-7xl mx-auto w-full flex flex-col justify-center items-center">
             
             <motion.div
@@ -1171,8 +1296,8 @@ export default function Home() {
           </div>
         </section>
 
-        {/* SEÇÃO 6 - OFERTA ESPECIAL (100vh) */}
-        <section id="secao-oferta" className="h-screen w-full relative flex items-center snap-start justify-center px-6 lg:px-16 overflow-hidden bg-[#050505]">
+        {/* SEÇÃO 6 - OFERTA ESPECIAL (min-h-screen/100vh) */}
+        <section id="secao-oferta" className="min-h-screen md:h-screen w-full relative flex items-center md:snap-start justify-center px-6 py-20 md:py-0 lg:px-16 overflow-hidden bg-[#050505]">
           <SectionBackground
             imageUrl="https://images.unsplash.com/photo-1606755962773-d324e0a13086?q=80&w=1200&auto=format&fit=crop"
             videoPlaceholderId="gourmet_burger_showcase"
@@ -1290,8 +1415,8 @@ export default function Home() {
           </div>
         </section>
 
-        {/* SEÇÃO 7 - CTA FINAL (100vh) */}
-        <section id="secao-ctafinal" className="h-screen w-full relative flex flex-col justify-between snap-start px-6 lg:px-16 overflow-hidden bg-[#050505] pt-28 pb-6">
+        {/* SEÇÃO 7 - CTA FINAL (min-h-screen/100vh) */}
+        <section id="secao-ctafinal" className="min-h-screen md:h-screen w-full relative flex flex-col justify-between md:snap-start px-6 py-20 md:py-0 lg:px-16 overflow-hidden bg-[#050505] pt-24 pb-6">
           
           {/* Main big CTA centered */}
           <div className="z-20 max-w-4xl mx-auto w-full text-center my-auto">
