@@ -1,0 +1,6 @@
+{
+  "name": "Hamburgueria Artesanal",
+  "description": "Landing page premium e altamente persuasiva para uma hamburgueria artesanal de alto padrão.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
