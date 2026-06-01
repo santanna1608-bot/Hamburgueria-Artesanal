@@ -279,7 +279,7 @@ export default function Home() {
         const isMobileDevice = w < 768;
         const targetXRatio = isMobileDevice ? 0.5 : 0.705;
         // Center vertically on desktop, shift slightly down on mobile to clear space for the text overlay
-        const targetYRatio = isMobileDevice ? 0.58 : 0.5;
+        const targetYRatio = isMobileDevice ? 0.66 : 0.5;
         const posX = (targetXRatio * w) - (0.73 * drawWidth) + parallaxX;
         const posY = (targetYRatio * h) - (drawHeight / 2) + parallaxY;
 
@@ -843,12 +843,12 @@ export default function Home() {
           <div className="z-20 max-w-7xl mx-auto w-full grid grid-cols-1 md:grid-cols-10 items-center h-full gap-8 select-none">
             
             {/* Lado Esquerdo (45%) */}
-            <div className="md:col-span-5 flex flex-col items-start pt-24 sm:pt-28 md:pt-20 pl-0 md:pl-4">
+            <div className="md:col-span-5 flex flex-col items-start pt-20 sm:pt-24 md:pt-20 pl-0 md:pl-4">
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.1 }}
-                className="flex items-center gap-2 px-4 py-1.5 bg-[#2a1a08]/90 border border-[#c5a059]/50 rounded-full mb-6 text-xs sm:text-sm font-semibold tracking-widest text-[#c5a059] uppercase shadow-lg self-start"
+                className="flex items-center gap-2 px-3 py-1 bg-[#2a1a08]/90 border border-[#c5a059]/50 rounded-full mb-4 text-[10px] sm:text-xs md:text-sm font-semibold tracking-widest text-[#c5a059] uppercase shadow-lg self-start"
               >
                 <Sparkles className="w-4 h-4 text-[#c5a059]" />
                 PREMIUM & 100% ARTESANAL POR ESSÊNCIA
@@ -858,7 +858,7 @@ export default function Home() {
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.2 }}
-                className="text-[2.2rem] sm:text-4xl md:text-5xl lg:text-6xl font-serif font-light leading-[1.12] mb-5 italic tracking-tight text-white max-w-md lg:max-w-lg"
+                className="text-[1.6rem] sm:text-3xl md:text-5xl lg:text-6xl font-serif font-light leading-[1.15] mb-3 sm:mb-5 italic tracking-tight text-white max-w-md lg:max-w-lg"
               >
                 O Hambúrguer <br />
                 Artesanal Que Vai <br />
@@ -875,20 +875,20 @@ export default function Home() {
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.3 }}
-                className="text-zinc-350 max-w-sm lg:max-w-md text-sm sm:text-base leading-relaxed font-sans"
+                className="text-zinc-350 max-w-[280px] sm:max-w-sm lg:max-w-md text-xs sm:text-sm md:text-base leading-relaxed font-sans"
               >
-                Ingredientes selecionados sob curadoria de chefs, carne Angus ultra-premium grelhada em chama viva e uma explosão de cremosidade insana em cada mordida.
+                Ingredientes selecionados sob curadoria de chefs, carne Angus ultra-premium grelhada em chama viva e uma explosion de cremosidade insana em cada mordida.
               </motion.p>
 
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.4 }}
-                className="mt-10 flex flex-wrap gap-4 items-center"
+                className="mt-6 sm:mt-10 flex w-full sm:w-auto gap-3 items-center"
               >
                 <button
                   onClick={() => scrollToSection(6)}
-                  className="px-8 py-4 bg-gradient-to-r from-[#7f0000] to-[#5a0000] text-white font-bold uppercase tracking-widest text-xs rounded-full border-b-4 border-[#3a0000] transition-all duration-300 hover:scale-105 hover:from-[#9a0000] hover:to-[#7f0000] hover:shadow-[0_0_25px_rgba(127,0,0,0.5)] cursor-pointer"
+                  className="flex-1 sm:flex-initial text-center px-4 py-3.5 sm:px-8 sm:py-4 bg-gradient-to-r from-[#7f0000] to-[#5a0000] text-white font-bold uppercase tracking-widest text-[10px] sm:text-xs rounded-full border-b-4 border-[#3a0000] transition-all duration-300 hover:scale-105 hover:from-[#9a0000] hover:to-[#7f0000] hover:shadow-[0_0_25px_rgba(127,0,0,0.5)] cursor-pointer"
                 >
                   PEÇA AGORA
                 </button>
@@ -907,7 +907,7 @@ export default function Home() {
                       }
                     });
                   }}
-                  className="px-8 py-4 bg-zinc-950/80 hover:bg-zinc-900 border border-zinc-800 hover:border-[#c5a059]/40 rounded-full font-bold uppercase tracking-widest text-xs text-zinc-300 transition-all duration-300 cursor-pointer"
+                  className="flex-1 sm:flex-initial text-center px-4 py-3.5 sm:px-8 sm:py-4 bg-zinc-950/80 hover:bg-zinc-900 border border-zinc-800 hover:border-[#c5a059]/40 rounded-full font-bold uppercase tracking-widest text-[10px] sm:text-xs text-zinc-300 transition-all duration-300 cursor-pointer"
                 >
                   VER EXPERIÊNCIA
                 </button>
@@ -919,7 +919,7 @@ export default function Home() {
           </div>
 
           {/* Scroll indicator down */}
-          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-1.5 opacity-80 cursor-pointer" onClick={() => scrollToSection(1)}>
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 hidden md:flex flex-col items-center gap-1.5 opacity-80 cursor-pointer" onClick={() => scrollToSection(1)}>
             <span className="text-[10px] tracking-widest uppercase font-bold text-[#c5a059] font-sans">SCROLL PARA EXPLORAR</span>
             <motion.div
               animate={{ y: [0, 8, 0] }}
