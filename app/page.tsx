@@ -844,7 +844,7 @@ export default function Home() {
           <div className="z-20 max-w-7xl mx-auto w-full grid grid-cols-1 md:grid-cols-10 items-center h-full gap-8 select-none">
             
             {/* Lado Esquerdo (45%) */}
-            <div className="md:col-span-5 flex flex-col items-start pt-20 sm:pt-24 md:pt-20 pl-0 md:pl-4">
+            <div className="md:col-span-5 flex flex-col items-start pt-32 sm:pt-36 md:pt-20 pl-0 md:pl-4">
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
