@@ -453,7 +453,8 @@ export default function Home() {
         if (targetFrameRef.current < totalFrames) {
           e.preventDefault();
 
-          const step = Math.max(1, Math.min(4, Math.abs(deltaY) * 0.08));
+          // Camera lenta: passo menor e sem mínimo de 1 frame, permitindo sub-frames extremamente suaves
+          const step = Math.min(1.5, Math.abs(deltaY) * 0.025);
           let nextFrame = targetFrameRef.current + step;
 
           if (nextFrame > totalFrames) {
@@ -486,7 +487,8 @@ export default function Home() {
               setIsScrollLocked(true);
             }
 
-            const step = Math.max(1, Math.min(4, Math.abs(deltaY) * 0.08));
+            // Camera lenta: passo menor e sem mínimo de 1 frame para sub-frames suaves ao subir
+            const step = Math.min(1.5, Math.abs(deltaY) * 0.025);
             let nextFrame = targetFrameRef.current - step;
 
             if (nextFrame < 1) {
