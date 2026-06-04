@@ -915,6 +915,38 @@ export default function Home() {
                   VER EXPERIÊNCIA
                 </button>
               </motion.div>
+
+              {/* Mobile Scroll indicator down */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.5 }}
+                onClick={() => {
+                  gsap.to(currentFrameRef, {
+                    current: totalFrames,
+                    duration: 1.2,
+                    ease: "power2.out",
+                    onUpdate: () => {
+                      targetFrameRef.current = currentFrameRef.current;
+                    },
+                    onComplete: () => {
+                      lockReleasedTime.current = Date.now();
+                      scrollToSection(1);
+                    }
+                  });
+                }}
+                className="flex md:hidden flex-col items-center gap-1.5 opacity-80 cursor-pointer w-full mt-10 select-none"
+              >
+                <span className="text-[10px] tracking-widest uppercase font-bold text-[#c5a059] font-sans">SCROLL PARA EXPLORAR</span>
+                <motion.div
+                  animate={{ y: [0, 8, 0] }}
+                  transition={{ repeat: Infinity, duration: 1.5 }}
+                  className="w-1.5 h-1.5 bg-[#c5a059] rounded-full"
+                />
+                <div className="w-5 h-8 border-2 border-zinc-800 rounded-full flex items-start justify-center p-1">
+                  <div className="w-1 h-2 bg-zinc-700 rounded-full" />
+                </div>
+              </motion.div>
             </div>
 
             {/* Lado Direito (55%) Spacer */}
