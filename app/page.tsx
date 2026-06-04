@@ -846,7 +846,7 @@ export default function Home() {
           <div className="z-20 max-w-7xl mx-auto w-full grid grid-cols-1 md:grid-cols-10 items-center h-full gap-8 select-none">
             
             {/* Lado Esquerdo (45%) */}
-            <div className="md:col-span-5 flex flex-col items-start pt-32 sm:pt-36 md:pt-20 pl-0 md:pl-4">
+            <div className="md:col-span-5 flex flex-col items-start pt-24 sm:pt-28 md:pt-20 pl-0 md:pl-4">
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
@@ -943,8 +943,8 @@ export default function Home() {
                   transition={{ repeat: Infinity, duration: 1.5 }}
                   className="w-1.5 h-1.5 bg-[#c5a059] rounded-full"
                 />
-                <div className="w-5 h-8 border-2 border-zinc-800 rounded-full flex items-start justify-center p-1">
-                  <div className="w-1 h-2 bg-zinc-700 rounded-full" />
+                <div className="w-5 h-8 border-2 border-[#c5a059]/60 bg-black/40 backdrop-blur-sm rounded-full flex items-start justify-center p-1">
+                  <div className="w-1 h-2 bg-[#c5a059]/80 rounded-full" />
                 </div>
               </motion.div>
             </div>
@@ -961,8 +961,8 @@ export default function Home() {
               transition={{ repeat: Infinity, duration: 1.5 }}
               className="w-1.5 h-1.5 bg-[#c5a059] rounded-full"
             />
-            <div className="w-5 h-8 border-2 border-zinc-800 rounded-full flex items-start justify-center p-1">
-              <div className="w-1 h-2 bg-zinc-700 rounded-full" />
+            <div className="w-5 h-8 border-2 border-[#c5a059]/60 bg-black/40 backdrop-blur-sm rounded-full flex items-start justify-center p-1">
+              <div className="w-1 h-2 bg-[#c5a059]/80 rounded-full" />
             </div>
           </div>
         </section>
